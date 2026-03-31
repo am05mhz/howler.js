@@ -1,5 +1,5 @@
 /*!
- *  howler.js v2.2.4
+ *  howler.js v2.2.5a
  *  howlerjs.com
  *
  *  (c) 2013-2020, James Simpson of GoldFire Studios
@@ -596,6 +596,10 @@
         withCredentials: o.xhr && o.xhr.withCredentials ? o.xhr.withCredentials : false,
       };
 
+      // Setup streaming support
+      self._streaming = o.streaming || false;
+      self._streamingFormat = o.streamingFormat || null;
+
       // Setup all other default properties.
       self._duration = 0;
       self._state = 'unloaded';
@@ -672,9 +676,9 @@
       for (var i=0; i<self._src.length; i++) {
         var ext, str;
 
-        if (self._format && self._format[i]) {
-          // If an extension was specified, use that instead.
-          ext = self._format[i];
+        if (self._streaming && self._streamingFormat && self._src[i]) {
+          // For streaming sources, use the streaming format
+          ext = self._streamingFormat;
         } else {
           // Make sure the source is a string.
           str = self._src[i];
@@ -699,8 +703,8 @@
           console.warn('No file extension was found. Consider using the "format" property or specify an extension.');
         }
 
-        // Check if this extension is available.
-        if (ext && Howler.codecs(ext)) {
+        // Check if this extension is available (or if it's a streaming format).
+        if (ext && (Howler.codecs(ext) || (self._streaming && (ext === 'dash' || ext === 'hls')))) {
           url = self._src[i];
           break;
         }
@@ -2274,6 +2278,19 @@
         self._node.preload = parent._preload === true ? 'auto' : parent._preload;
         self._node.volume = volume * Howler.volume();
 
+        // Initialize streaming player if needed
+        if (parent._streaming && parent._streamingFormat === 'dash' && typeof MediaPlayer !== 'undefined') {
+          // Initialize dash.js player
+          self._streamingPlayer = MediaPlayer().create(self._node);
+          self._streamingPlayer.initialize(parent._src, self._node);
+        } else if (parent._streaming && parent._streamingFormat === 'hls' && typeof Hls !== 'undefined') {
+          // Initialize hls.js player
+          self._streamingPlayer = new Hls();
+          self._streamingPlayer.loadSource(parent._src, self._node);
+          // Attach media element to hls.js manually if needed
+          self._streamingPlayer.attachMedia(self._node);
+        }
+
         // Begin loading the source.
         self._node.load();
       }
@@ -2590,7 +2607,7 @@
 /*!
  *  Spatial Plugin - Adds support for stereo and 3D audio where Web Audio is supported.
  *  
- *  howler.js v2.2.4
+ *  howler.js v2.2.5a
  *  howlerjs.com
  *
  *  (c) 2013-2020, James Simpson of GoldFire Studios
