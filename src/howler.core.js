@@ -2344,6 +2344,9 @@
         self._node.preload = parent._preload === true ? 'auto' : parent._preload;
         self._node.volume = volume * Howler.volume();
 
+        // Set crossOrigin for CORS support needed by streaming players
+        self._node.crossOrigin = 'anonymous';
+
         // Initialize streaming player if needed
         if (parent._streaming && parent._streamingFormat === 'dash' && typeof dashjs !== 'undefined' && dashjs.MediaPlayer) {
           // Initialize dash.js player with correct API
@@ -2353,7 +2356,9 @@
           // Initialize hls.js player
           self._streamingPlayer = new Hls({
             autoStartLoad: true,
-            debug: false
+            debug: false,
+            enableWorker: true,
+            lowLatencyMode: false
           });
           // Attach media element BEFORE loading source
           self._streamingPlayer.attachMedia(self._node);
