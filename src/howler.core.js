@@ -2277,13 +2277,12 @@
         self._node.addEventListener('ended', self._endFn, false);
 
         // Setup the new audio node.
-        self._node.src = parent._src;
         self._node.preload = parent._preload === true ? 'auto' : parent._preload;
         self._node.volume = volume * Howler.volume();
 
         // Initialize streaming player if needed
         if (parent._streaming && parent._streamingFormat === 'dash' && typeof dashjs !== 'undefined' && dashjs.MediaPlayer) {
-          // Initialize dashjs player
+          // Initialize dash.js player
           self._streamingPlayer = dashjs.MediaPlayer().create();
           self._streamingPlayer.initialize(self._node, parent._src);
         } else if (parent._streaming && parent._streamingFormat === 'hls' && typeof Hls !== 'undefined') {
@@ -2291,10 +2290,12 @@
           self._streamingPlayer = new Hls();
           self._streamingPlayer.attachMedia(self._node);
           self._streamingPlayer.loadSource(parent._src);
+        } else {
+          // For standard audio formats, set the source directly
+          self._node.src = parent._src;
+          // Begin loading the source.
+          self._node.load();
         }
-
-        // Begin loading the source.
-        self._node.load();
       }
 
       return self;
