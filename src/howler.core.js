@@ -596,6 +596,11 @@
         withCredentials: o.xhr && o.xhr.withCredentials ? o.xhr.withCredentials : false,
       };
 
+      // Setup HTML5 audio pool size
+      if (typeof o.html5PoolSize === 'number' && o.html5PoolSize > 0) {
+        Howler.html5PoolSize = o.html5PoolSize;
+      }
+
       // Setup streaming support
       self._streaming = o.streaming || false;
       self._streamingFormat = o.streamingFormat || null;
@@ -1819,6 +1824,14 @@
 
         // Empty out all of the nodes.
         delete sounds[i]._node;
+
+        // Destroy streaming player if present.
+        if (sounds[i]._streamingPlayer) {
+          if (sounds[i]._streamingPlayer.destroy) {
+            sounds[i]._streamingPlayer.destroy();
+          }
+          delete sounds[i]._streamingPlayer;
+        }
 
         // Make sure all timers are cleared out.
         self._clearTimer(sounds[i]._id);
