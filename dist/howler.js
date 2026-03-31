@@ -2355,10 +2355,11 @@
         } else if (parent._streaming && parent._streamingFormat === 'hls' && typeof Hls !== 'undefined' && Hls.isSupported()) {
           // Initialize hls.js player
           self._streamingPlayer = new Hls({
-            autoStartLoad: true,
-            debug: false,
+            debug: true,
+            // autoStartLoad: true,
             enableWorker: true,
-            lowLatencyMode: false
+            lowLatencyMode: true,
+            backBufferLength: 90
           });
           // Attach media element BEFORE loading source
           self._streamingPlayer.attachMedia(self._node);
