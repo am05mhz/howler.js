@@ -2366,8 +2366,9 @@
           // Add event listeners for HLS
           self._streamingPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
             // Manifest parsed - audio is ready to play
-            parent._state = 'loaded';
-            parent._emit('load');
+            // parent._state = 'loaded';
+            // parent._emit('load');
+            self._node.play()
           });
           
           self._streamingPlayer.on(Hls.Events.ERROR, function(event, data) {
