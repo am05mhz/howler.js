@@ -2367,15 +2367,18 @@
         self._node.preload = parent._preload === true ? 'auto' : parent._preload;
         self._node.volume = volume * Howler.volume();
         
-        // Set crossOrigin for CORS support needed by streaming players
-        self._node.crossOrigin = 'anonymous';
-
         // Initialize streaming player if needed
         if (parent._streaming && parent._streamingFormat === 'dash' && typeof dashjs !== 'undefined' && dashjs.MediaPlayer) {
+          // Unset crossOrigin for Dash
+          self._node.crossOrigin = undefined;
+
           // Initialize dash.js player with correct API
           self._streamingPlayer = dashjs.MediaPlayer().create();
           self._streamingPlayer.initialize(self._node, parent._src, false);
         } else if (parent._streaming && parent._streamingFormat === 'hls' && typeof Hls !== 'undefined' && Hls.isSupported()) {
+          // Set crossOrigin for CORS HLS
+          self._node.crossOrigin = 'anonymous';
+
           // Initialize hls.js player
           self._streamingPlayer = new Hls({
             autoStartLoad: true,
