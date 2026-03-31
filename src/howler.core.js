@@ -2321,6 +2321,12 @@
         // Get an unlocked Audio object from the pool.
         self._node = Howler._obtainHtml5Audio();
 
+        // attach to dom
+        self._node.style.display = 'none';
+        if (typeof document !== 'undefined' && document.body) {
+          document.body.appendChild(self._node);
+        }
+
         // Listen for errors (http://dev.w3.org/html5/spec-author-view/spec.html#mediaerror).
         self._errorFn = self._errorListener.bind(self);
         self._node.addEventListener('error', self._errorFn, false);
