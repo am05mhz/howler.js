@@ -2339,11 +2339,14 @@
           // Initialize dash.js player with correct API
           self._streamingPlayer = dashjs.MediaPlayer().create();
           self._streamingPlayer.initialize(self._node, parent._src, false);
-        } else if (parent._streaming && parent._streamingFormat === 'hls' && typeof Hls !== 'undefined') {
+        } else if (parent._streaming && parent._streamingFormat === 'hls' && typeof Hls !== 'undefined' && Hls.isSupported()) {
           // Initialize hls.js player
           self._streamingPlayer = new Hls();
-          self._streamingPlayer.attachMedia(self._node);
           self._streamingPlayer.loadSource(parent._src);
+          self._streamingPlayer.attachMedia(self._node);
+          self._streamingPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
+            self._node.play();
+          });
         } else {
           // For standard audio formats, set the source directly
           self._node.src = parent._src;
