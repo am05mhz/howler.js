@@ -2352,18 +2352,6 @@
           // Initialize dash.js player with correct API
           self._streamingPlayer = dashjs.MediaPlayer().create();
           self._streamingPlayer.initialize(self._node, parent._src, false);
-          
-          // Manually set loaded state for DASH when canplay event fires
-          // DASH.js will trigger standard HTML5 audio events
-          var dashReadyHandler = function() {
-            if (parent._state !== 'loaded') {
-              parent._state = 'loaded';
-              parent._emit('load');
-              parent._loadQueue();
-            }
-            self._node.removeEventListener('canplay', dashReadyHandler, false);
-          };
-          self._node.addEventListener('canplay', dashReadyHandler, false);
         } else if (parent._streaming && parent._streamingFormat === 'hls' && typeof Hls !== 'undefined' && Hls.isSupported()) {
           // Initialize hls.js player
           self._streamingPlayer = new Hls({
@@ -2378,10 +2366,17 @@
           // Add event listeners for HLS
           self._streamingPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
             // Manifest parsed - audio is ready to play
-            if (parent._state !== 'loaded') {
-              parent._state = 'loaded';
-              parent._emit('load');
-              parent._loadQueue();
+            parent._state = 'loaded';
+            parent._emit('load');
+            
+            // Only autoplay if explicitly requested
+            if (parent._autoplay) {
+              var playPromise = self._node.play();
+              if (playPromise && typeof Promise !== 'undefined' && (playPromise instanceof Promise || typeof playPromise.then === 'function')) {
+                playPromise.catch(function(err) {
+                  console.warn('HLS autoplay failed:', err);
+                });
+              }
             }
           });
           
