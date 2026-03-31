@@ -2286,8 +2286,7 @@
           // Initialize dash.js player
           if (typeof dashjs !== 'undefined' && dashjs.MediaPlayer) {
             self._streamingPlayer = dashjs.MediaPlayer().create();
-            self._streamingPlayer.attachView(self._node);
-            self._streamingPlayer.attachSource(parent._src);
+            self._streamingPlayer.initialize(self._node, parent._src);
           }
         } else if (parent._streaming && parent._streamingFormat === 'hls') {
           // Initialize hls.js player
