@@ -909,15 +909,14 @@
       } else {
         // Fire this when the sound is ready to play to begin HTML5 Audio playback.
         var playHtml5 = function() {
-          node.currentTime = seek;
+          // For streaming audio, don't set currentTime as the player manages it
+          if (!parent._streaming) {
+            node.currentTime = seek;
+          }
+          
           node.muted = sound._muted || self._muted || Howler._muted || node.muted;
           node.volume = sound._volume * Howler.volume();
           node.playbackRate = sound._rate;
-          
-          // Resume streaming player if present
-          if (sound._streamingPlayer && sound._streamingPlayer.play) {
-            sound._streamingPlayer.play();
-          }
 
           // Some browsers will throw an error if this is called without user interaction.
           try {
@@ -2337,6 +2336,9 @@
         // Setup the new audio node.
         self._node.preload = parent._preload === true ? 'auto' : parent._preload;
         self._node.volume = volume * Howler.volume();
+        
+        // Set crossOrigin for CORS support needed by streaming players
+        self._node.crossOrigin = 'anonymous';
 
         // Initialize streaming player if needed
         if (parent._streaming && parent._streamingFormat === 'dash' && typeof dashjs !== 'undefined' && dashjs.MediaPlayer) {
@@ -2347,8 +2349,11 @@
           // Initialize hls.js player
           self._streamingPlayer = new Hls({
             autoStartLoad: true,
-            debug: false
+            debug: false,
+            enableWorker: true,
+            lowLatencyMode: false
           });
+          
           // Attach media element BEFORE loading source
           self._streamingPlayer.attachMedia(self._node);
           
@@ -2361,13 +2366,21 @@
           
           self._streamingPlayer.on(Hls.Events.ERROR, function(event, data) {
             // Handle HLS errors
+            console.warn('HLS error:', event, data);
             if (data.fatal) {
               console.error('HLS fatal error:', data);
               parent._emit('loaderror', null, 'HLS streaming error: ' + data.type);
             }
           });
           
-          // Load the source after attaching media
+          self._streamingPlayer.on(Hls.Events.FRAGMENT_LOADING, function(event, data) {
+            // Track segment loading for debugging
+            if (parent._streaming) {
+              // Segments are loading properly
+            }
+          });
+          
+          // Load the source after attaching media and setting up listeners
           self._streamingPlayer.loadSource(parent._src);
         } else {
           // For standard audio formats, set the source directly
@@ -2425,15 +2438,25 @@
       var self = this;
       var parent = self._parent;
 
-      // Round up the duration to account for the lower precision in HTML5 Audio.
-      parent._duration = Math.ceil(self._node.duration * 10) / 10;
+      // For streaming audio (HLS/DASH), duration might be Infinity, so skip rounding
+      // Duration is already set by the streaming player's MANIFEST_PARSED event
+      if (!parent._streaming) {
+        // Round up the duration to account for the lower precision in HTML5 Audio.
+        parent._duration = Math.ceil(self._node.duration * 10) / 10;
+      } else {
+        // For streaming, use the audio element's duration if available
+        if (self._node.duration && isFinite(self._node.duration)) {
+          parent._duration = Math.ceil(self._node.duration * 10) / 10;
+        }
+      }
 
       // Setup a sprite if none is defined.
       if (Object.keys(parent._sprite).length === 0) {
         parent._sprite = {__default: [0, parent._duration * 1000]};
       }
 
-      if (parent._state !== 'loaded') {
+      // For streaming audio, the MANIFEST_PARSED event already sets the state
+      if (parent._state !== 'loaded' && !parent._streaming) {
         parent._state = 'loaded';
         parent._emit('load');
         parent._loadQueue();
