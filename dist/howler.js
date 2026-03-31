@@ -604,6 +604,7 @@
       // Setup streaming support
       self._streaming = o.streaming || false;
       self._streamingFormat = o.streamingFormat || null;
+      self._audioElementId = o.audioElementId || null;
 
       // Setup all other default properties.
       self._duration = 0;
@@ -1835,6 +1836,12 @@
           }
           delete sounds[i]._streamingPlayer;
         }
+        
+        // Remove audio element from DOM if it was created for streaming
+        if (!self._webAudio && sounds[i]._node && sounds[i]._node.parentNode && 
+            self._streaming && !self._audioElementId) {
+          sounds[i]._node.parentNode.removeChild(sounds[i]._node);
+        }
 
         // Make sure all timers are cleared out.
         self._clearTimer(sounds[i]._id);
@@ -2317,8 +2324,27 @@
         self._node.paused = true;
         self._node.connect(Howler.masterGain);
       } else if (!Howler.noAudio) {
-        // Get an unlocked Audio object from the pool.
-        self._node = Howler._obtainHtml5Audio();
+        // For streaming audio, try to use an existing audio element from the document
+        // Or create/use one that can be attached to the DOM
+        if (parent._streaming && parent._audioElementId) {
+          // Use existing audio element from DOM
+          self._node = document.getElementById(parent._audioElementId);
+          if (!self._node) {
+            console.warn('Audio element with id "' + parent._audioElementId + '" not found, creating new one');
+            self._node = Howler._obtainHtml5Audio();
+          }
+        } else if (parent._streaming && !parent._audioElementId) {
+          // For streaming without specified element, create one and add to body
+          // This ensures HLS.js can properly decode and output audio
+          self._node = document.createElement('audio');
+          self._node.style.display = 'none';
+          if (typeof document !== 'undefined' && document.body) {
+            document.body.appendChild(self._node);
+          }
+        } else {
+          // Standard audio playback - use pooled audio element
+          self._node = Howler._obtainHtml5Audio();
+        }
 
         // Listen for errors (http://dev.w3.org/html5/spec-author-view/spec.html#mediaerror).
         self._errorFn = self._errorListener.bind(self);
