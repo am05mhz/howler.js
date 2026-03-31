@@ -2279,16 +2279,20 @@
         self._node.volume = volume * Howler.volume();
 
         // Initialize streaming player if needed
-        if (parent._streaming && parent._streamingFormat === 'dash' && typeof MediaPlayer !== 'undefined') {
+        if (parent._streaming && parent._streamingFormat === 'dash') {
           // Initialize dash.js player
-          self._streamingPlayer = MediaPlayer().create(self._node);
-          self._streamingPlayer.initialize(parent._src, self._node);
-        } else if (parent._streaming && parent._streamingFormat === 'hls' && typeof Hls !== 'undefined') {
+          if (typeof dashjs !== 'undefined' && dashjs.MediaPlayer) {
+            self._streamingPlayer = dashjs.MediaPlayer().create();
+            self._streamingPlayer.attachView(self._node);
+            self._streamingPlayer.attachSource(parent._src);
+          }
+        } else if (parent._streaming && parent._streamingFormat === 'hls') {
           // Initialize hls.js player
-          self._streamingPlayer = new Hls();
-          self._streamingPlayer.loadSource(parent._src, self._node);
-          // Attach media element to hls.js manually if needed
-          self._streamingPlayer.attachMedia(self._node);
+          if (typeof Hls !== 'undefined') {
+            self._streamingPlayer = new Hls();
+            self._streamingPlayer.attachMedia(self._node);
+            self._streamingPlayer.loadSource(parent._src);
+          }
         }
 
         // Begin loading the source.
