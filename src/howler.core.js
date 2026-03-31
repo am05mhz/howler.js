@@ -985,17 +985,21 @@
           }
         };
 
-        // If this is streaming audio, make sure the src is set and load again.
-        if (node.src === 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA') {
+        // If this is streaming audio, don't call load() as the streaming player manages it
+        if (!parent._streaming && node.src === 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA') {
           node.src = self._src;
           node.load();
         }
 
-        // Play immediately if ready, or wait for the 'canplaythrough'e vent.
-        var loadedNoReadyState = (window && window.ejecta) || (!node.readyState && Howler._navigator.isCocoonJS);
-        if (node.readyState >= 3 || loadedNoReadyState) {
+        // For streaming audio, we need to wait for the streaming player to be ready, not the audio element
+        if (parent._streaming) {
+          // For HLS and DASH streams, just play directly with streaming player managing the buffering
+          playHtml5();
+        } else if (node.readyState >= 3 || (window && window.ejecta) || (!node.readyState && Howler._navigator.isCocoonJS)) {
+          // Standard audio: Play immediately if ready
           playHtml5();
         } else {
+          // Standard audio: Wait for canplaythrough event
           self._playLock = true;
           self._state = 'loading';
 
@@ -2341,12 +2345,30 @@
           self._streamingPlayer.initialize(self._node, parent._src, false);
         } else if (parent._streaming && parent._streamingFormat === 'hls' && typeof Hls !== 'undefined' && Hls.isSupported()) {
           // Initialize hls.js player
-          self._streamingPlayer = new Hls();
-          self._streamingPlayer.loadSource(parent._src);
-          self._streamingPlayer.attachMedia(self._node);
-          self._streamingPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
-            self._node.play();
+          self._streamingPlayer = new Hls({
+            autoStartLoad: true,
+            debug: false
           });
+          // Attach media element BEFORE loading source
+          self._streamingPlayer.attachMedia(self._node);
+          
+          // Add event listeners for HLS
+          self._streamingPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
+            // Manifest parsed - audio is ready to play
+            parent._state = 'loaded';
+            parent._emit('load');
+          });
+          
+          self._streamingPlayer.on(Hls.Events.ERROR, function(event, data) {
+            // Handle HLS errors
+            if (data.fatal) {
+              console.error('HLS fatal error:', data);
+              parent._emit('loaderror', null, 'HLS streaming error: ' + data.type);
+            }
+          });
+          
+          // Load the source after attaching media
+          self._streamingPlayer.loadSource(parent._src);
         } else {
           // For standard audio formats, set the source directly
           self._node.src = parent._src;
