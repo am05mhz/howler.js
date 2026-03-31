@@ -2469,15 +2469,15 @@
 
       // For streaming audio (HLS/DASH), duration might be Infinity, so skip rounding
       // Duration is already set by the streaming player's MANIFEST_PARSED event
-      if (!parent._streaming) {
+      // if (!parent._streaming) {
         // Round up the duration to account for the lower precision in HTML5 Audio.
         parent._duration = Math.ceil(self._node.duration * 10) / 10;
-      } else {
-        // For streaming, use the audio element's duration if available
-        if (self._node.duration && isFinite(self._node.duration)) {
-          parent._duration = Math.ceil(self._node.duration * 10) / 10;
-        }
-      }
+      // } else {
+      //   // For streaming, use the audio element's duration if available
+      //   if (self._node.duration && isFinite(self._node.duration)) {
+      //     parent._duration = Math.ceil(self._node.duration * 10) / 10;
+      //   }
+      // }
 
       // Setup a sprite if none is defined.
       if (Object.keys(parent._sprite).length === 0) {
