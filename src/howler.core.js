@@ -908,6 +908,11 @@
           node.muted = sound._muted || self._muted || Howler._muted || node.muted;
           node.volume = sound._volume * Howler.volume();
           node.playbackRate = sound._rate;
+          
+          // Resume streaming player if present
+          if (sound._streamingPlayer && sound._streamingPlayer.play) {
+            sound._streamingPlayer.play();
+          }
 
           // Some browsers will throw an error if this is called without user interaction.
           try {
@@ -1064,6 +1069,13 @@
               self._cleanBuffer(sound._node);
             } else if (!isNaN(sound._node.duration) || sound._node.duration === Infinity) {
               sound._node.pause();
+              
+              // Pause streaming player if present
+              if (sound._streamingPlayer) {
+                if (sound._streamingPlayer.pause) {
+                  sound._streamingPlayer.pause();
+                }
+              }
             }
           }
         }
@@ -1134,6 +1146,16 @@
             } else if (!isNaN(sound._node.duration) || sound._node.duration === Infinity) {
               sound._node.currentTime = sound._start || 0;
               sound._node.pause();
+              
+              // Stop streaming player if present
+              if (sound._streamingPlayer) {
+                if (sound._streamingPlayer.pause) {
+                  sound._streamingPlayer.pause();
+                }
+                if (sound._streamingPlayer.reset) {
+                  sound._streamingPlayer.reset();
+                }
+              }
 
               // If this is a live stream, stop download once the audio is stopped.
               if (sound._node.duration === Infinity) {
@@ -1200,6 +1222,11 @@
             sound._node.gain.setValueAtTime(muted ? 0 : sound._volume, Howler.ctx.currentTime);
           } else if (sound._node) {
             sound._node.muted = Howler._muted ? true : muted;
+            
+            // Sync mute state with streaming player
+            if (sound._streamingPlayer && sound._streamingPlayer.setMute) {
+              sound._streamingPlayer.setMute(Howler._muted ? true : muted);
+            }
           }
 
           self._emit('mute', sound._id);
@@ -1278,6 +1305,11 @@
               sound._node.gain.setValueAtTime(vol, Howler.ctx.currentTime);
             } else if (sound._node && !sound._muted) {
               sound._node.volume = vol * Howler.volume();
+              
+              // Sync volume with streaming player
+              if (sound._streamingPlayer && sound._streamingPlayer.setVolume) {
+                sound._streamingPlayer.setVolume(vol * Howler.volume());
+              }
             }
 
             self._emit('volume', sound._id);
@@ -1658,6 +1690,15 @@
           // Update the seek position for HTML5 Audio.
           if (!self._webAudio && sound._node && !isNaN(sound._node.duration)) {
             sound._node.currentTime = seek;
+            
+            // Seek streaming player if present
+            if (sound._streamingPlayer) {
+              if (sound._streamingPlayer.seek) {
+                sound._streamingPlayer.seek(seek);
+              } else if (sound._streamingPlayer.time !== undefined) {
+                sound._streamingPlayer.time(seek);
+              }
+            }
           }
 
           // Seek and emit when ready.
