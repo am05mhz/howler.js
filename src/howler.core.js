@@ -578,10 +578,20 @@
         setupAudioContext();
       }
 
+      // Setup HTML5 audio pool size
+      if (typeof o.html5PoolSize === 'number' && o.html5PoolSize > 0) {
+        Howler.html5PoolSize = o.html5PoolSize;
+      }
+
+      // Setup streaming support
+      self._streaming = o.streaming || false;
+      self._streamingFormat = o.streamingFormat || null;
+      self._audioElementId = o.audioElementId || null;
+
       // Setup user-defined default properties.
       self._autoplay = o.autoplay || false;
       self._format = (typeof o.format !== 'string') ? o.format : [o.format];
-      self._html5 = o.html5 || false;
+      self._html5 = self._streaming || o.html5 || false;
       self._muted = o.mute || false;
       self._loop = o.loop || false;
       self._pool = o.pool || 5;
@@ -595,16 +605,6 @@
         headers: o.xhr && o.xhr.headers ? o.xhr.headers : null,
         withCredentials: o.xhr && o.xhr.withCredentials ? o.xhr.withCredentials : false,
       };
-
-      // Setup HTML5 audio pool size
-      if (typeof o.html5PoolSize === 'number' && o.html5PoolSize > 0) {
-        Howler.html5PoolSize = o.html5PoolSize;
-      }
-
-      // Setup streaming support
-      self._streaming = o.streaming || false;
-      self._streamingFormat = o.streamingFormat || null;
-      self._audioElementId = o.audioElementId || null;
 
       // Setup all other default properties.
       self._duration = 0;
@@ -2332,18 +2332,22 @@
           if (!self._node) {
             console.warn('Audio element with id "' + parent._audioElementId + '" not found, creating new one');
             self._node = Howler._obtainHtml5Audio();
-          }
-        } else if (parent._streaming && !parent._audioElementId) {
-          // For streaming without specified element, create one and add to body
-          // This ensures HLS.js can properly decode and output audio
-          self._node = document.createElement('audio');
-          self._node.style.display = 'none';
-          if (typeof document !== 'undefined' && document.body) {
-            document.body.appendChild(self._node);
+            self._node.id = parent._audioElementId;
+            self._node.style.display = 'none';
+            if (typeof document !== 'undefined' && document.body) {
+              document.body.appendChild(self._node);
+            }
           }
         } else {
-          // Standard audio playback - use pooled audio element
+          // For streaming without specified element, create one and add to body
+          // This ensures HLS.js can properly decode and output audio
           self._node = Howler._obtainHtml5Audio();
+          if (parent._streaming){
+            self._node.style.display = 'none';
+            if (typeof document !== 'undefined' && document.body) {
+              document.body.appendChild(self._node);
+            }
+          }
         }
 
         // Listen for errors (http://dev.w3.org/html5/spec-author-view/spec.html#mediaerror).
