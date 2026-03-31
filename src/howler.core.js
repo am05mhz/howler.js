@@ -679,6 +679,9 @@
         if (self._streaming && self._streamingFormat && self._src[i]) {
           // For streaming sources, use the streaming format
           ext = self._streamingFormat;
+        } else if (self._format && self._format[i]) {
+          // If an extension was specified, use that instead.
+          ext = self._format[i];
         } else {
           // Make sure the source is a string.
           str = self._src[i];
