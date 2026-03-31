@@ -1,7 +1,7 @@
 {
   "name": "howler.js",
-  "description": "Javascript audio library for the modern web.",
-  "homepage": "https://howlerjs.com",
+  "description": "Modified favascript audio library for the modern web to support modern streaming format.",
+  "homepage": "https://github.com/am05mhz/howler.js",
   "keywords": [
     "howler",
     "howler.js",
@@ -12,14 +12,16 @@
     "html5",
     "html5 audio",
     "audio sprite",
-    "audiosprite"
+    "audiosprite",
+    "dash",
+    "hls"
   ],
   "authors": [
-    "James Simpson <james@goldfirestudios.com> (http://goldfirestudios.com)"
+    "am05mhz"
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/goldfire/howler.js.git"
+    "url": "git://github.com/am05mhz/howler.js.git"
   },
   "main": "dist/howler.js",
   "license": "MIT",
