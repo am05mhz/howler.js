@@ -2356,7 +2356,7 @@
           // Initialize hls.js player
           self._streamingPlayer = new Hls({
             debug: true,
-            // autoStartLoad: true,
+            autoStartLoad: true,
             enableWorker: true,
             lowLatencyMode: true,
             backBufferLength: 90
@@ -2364,20 +2364,35 @@
           // Attach media element BEFORE loading source
           self._streamingPlayer.attachMedia(self._node);
           
+          // Track if load event has been emitted
+          var loadEventEmitted = false;
+          
+          // Add HTML5 audio element listeners for stream readiness
+          var onCanPlay = function() {
+            if (!loadEventEmitted) {
+              parent._state = 'loaded';
+              parent._emit('load');
+              loadEventEmitted = true;
+            }
+            if (parent._autoplay) {
+              self._node.play().catch(function(err) {
+                console.warn('HLS autoplay failed:', err);
+              });
+            }
+          };
+          
           // Add event listeners for HLS
           self._streamingPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
-            // Manifest parsed - audio is ready to play
-            parent._state = 'loaded';
-            parent._emit('load');
-            
-            // Only autoplay if explicitly requested
+            console.log('HLS MANIFEST_PARSED event triggered');
+            if (!loadEventEmitted) {
+              parent._state = 'loaded';
+              parent._emit('load');
+              loadEventEmitted = true;
+            }
             if (parent._autoplay) {
-              var playPromise = self._node.play();
-              if (playPromise && typeof Promise !== 'undefined' && (playPromise instanceof Promise || typeof playPromise.then === 'function')) {
-                playPromise.catch(function(err) {
-                  console.warn('HLS autoplay failed:', err);
-                });
-              }
+              self._node.play().catch(function(err) {
+                console.warn('HLS autoplay failed:', err);
+              });
             }
           });
           
@@ -2388,6 +2403,9 @@
               parent._emit('loaderror', null, 'HLS streaming error: ' + data.type);
             }
           });
+          
+          // Also listen to HTML5 audio events as fallback
+          self._node.addEventListener('canplay', onCanPlay, false);
           
           // Load the source after attaching media
           self._streamingPlayer.loadSource(parent._src);
