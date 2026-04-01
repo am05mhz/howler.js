@@ -951,7 +951,7 @@
             // Support older browsers that don't support promises, and thus don't have this issue.
             if (play && typeof Promise !== 'undefined' && (play instanceof Promise || typeof play.then === 'function')) {
               // Implements a lock to prevent DOMException: The play() request was interrupted by a call to pause().
-              self._playLock = true;
+              self._playLock = self._streaming ? false : true;
 
               // Set param values immediately.
               setParams();
@@ -1020,10 +1020,11 @@
 
         // For streaming audio, initialize the streaming player first
         console.log(self)
-        if (self._streaming && !sound._streamingInitialized) {
+        if (self._streaming && !self._streamingInitialized) {
+          self._playLock = false; // never playLock for streaming
           // Initialize streaming player for this sound instance
           sound._initializeStreamingPlayer(sound, function() {
-            sound._streamingInitialized = true;
+            self._streamingInitialized = true;
             // Once streaming player is ready, play
             playHtml5();
           });
@@ -1142,6 +1143,7 @@
     stop: function (id, internal) {
       var self = this;
 
+      console.log(self)
       // If the sound hasn't loaded, add it to the load queue to stop when capable.
       if (self._state !== 'loaded' || self._playLock) {
         self._queue.push({
@@ -1156,6 +1158,8 @@
 
       // If no id is passed, get all ID's to be stopped.
       var ids = self._getSoundIds(id);
+
+      console.log('stop', ids)
 
       for (var i = 0; i < ids.length; i++) {
         // Clear the end timer.
@@ -1195,6 +1199,7 @@
               sound._node.pause();
 
               // Stop and destroy streaming player if present
+              console.log(sound);
               if (sound._streamingPlayer) {
                 if (sound._streamingPlayer.pause) {
                   sound._streamingPlayer.pause();
@@ -2518,7 +2523,7 @@
      * @param  {Function} callback Function to call when ready.
      */
     _initializeStreamingPlayer: function (sound, callback) {
-      var self = this;
+      var self = sound;
       var parent = self._parent;
 
       if (parent._streamingFormat === 'dash' && typeof dashjs !== 'undefined' && dashjs.MediaPlayer) {

@@ -9,6 +9,8 @@
   <div id="container">
     <button class="button" id="webaudio">RUN WEB AUDIO TESTS</button>
     <button class="button" id="html5">RUN HTML5 TESTS</button>
+    <button class="button" id="hlsstream">RUN HLS STREAM TESTS</button>
+    <button class="button" id="dashstream">RUN DASH STREAM TESTS</button>
     <button class="button" id="spatial">RUN SPATIAL TESTS</button>
   </div>
 
@@ -19,6 +21,14 @@
 
     document.getElementById('html5').onclick = function() {
       window.location = 'core.html5audio.html';
+    };
+
+    document.getElementById('hlsstream').onclick = function() {
+      window.location = 'core.hlsstream.html';
+    };
+
+    document.getElementById('dashstream').onclick = function() {
+      window.location = 'core.dashstream.html';
     };
 
     document.getElementById('spatial').onclick = function() {
