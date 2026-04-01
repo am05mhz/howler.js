@@ -608,6 +608,9 @@
       // Setup all other default properties.
       self._duration = 0;
       self._state = 'unloaded';
+      self._loadState = 'unloaded'; // Separate load state for streaming
+      self._playState = 'stopped'; // Separate play state
+      self._streamingInitialized = false;
       self._sounds = [];
       self._endTimers = {};
       self._queue = [];
@@ -618,6 +621,10 @@
       self._onfade = o.onfade ? [{ fn: o.onfade }] : [];
       self._onload = o.onload ? [{ fn: o.onload }] : [];
       self._onloaderror = o.onloaderror ? [{ fn: o.onloaderror }] : [];
+      self._onloadstart = o.onloadstart ? [{ fn: o.onloadstart }] : [];
+      self._onprogress = o.onprogress ? [{ fn: o.onprogress }] : [];
+      self._oncanplay = o.oncanplay ? [{ fn: o.oncanplay }] : [];
+      self._oncanplaythrough = o.oncanplaythrough ? [{ fn: o.oncanplaythrough }] : [];
       self._onplayerror = o.onplayerror ? [{ fn: o.onplayerror }] : [];
       self._onpause = o.onpause ? [{ fn: o.onpause }] : [];
       self._onplay = o.onplay ? [{ fn: o.onplay }] : [];
@@ -628,6 +635,13 @@
       self._onseek = o.onseek ? [{ fn: o.onseek }] : [];
       self._onunlock = o.onunlock ? [{ fn: o.onunlock }] : [];
       self._onresume = [];
+      self._onwaiting = o.onwaiting ? [{ fn: o.onwaiting }] : [];
+      self._onseeking = o.onseeking ? [{ fn: o.onseeking }] : [];
+      self._onseeked = o.onseeked ? [{ fn: o.onseeked }] : [];
+      self._ondurationchange = o.ondurationchange ? [{ fn: o.ondurationchange }] : [];
+      self._ontimeupdate = o.ontimeupdate ? [{ fn: o.ontimeupdate }] : [];
+      self._onratechange = o.onratechange ? [{ fn: o.onratechange }] : [];
+      self._onvolumechange = o.onvolumechange ? [{ fn: o.onvolumechange }] : [];
 
       // Web Audio or HTML5 Audio?
       self._webAudio = Howler.usingWebAudio && !self._html5;
@@ -724,6 +738,10 @@
       }
 
       self._src = url;
+      self._state = 'loadstart';
+      self._emit('loadstart');
+
+      // Then transition to loading
       self._state = 'loading';
 
       // If the hosting page is HTTPS and the source isn't,
@@ -733,12 +751,18 @@
         self._webAudio = false;
       }
 
-      // Create a new sound object and add it to the pool.
-      new Sound(self);
+      if (!self._streaming) {
+        // Create a new sound object and add it to the pool.
+        new Sound(self);
 
-      // Load and decode the audio data for playback.
-      if (self._webAudio) {
-        loadBuffer(self);
+        // Load and decode the audio data for playback.
+        if (self._webAudio) {
+          loadBuffer(self);
+        }
+      } else {
+        // For streaming, just set loaded
+        self._state = 'loaded';
+        self._emit('load');
       }
 
       return self;
@@ -835,11 +859,11 @@
       }
 
       // Determine how long to play for and where to start playing.
-      var seek = Math.max(0, sound._seek > 0 ? sound._seek : self._sprite[sprite][0] / 1000);
-      var duration = Math.max(0, ((self._sprite[sprite][0] + self._sprite[sprite][1]) / 1000) - seek);
+      var seek = self._streaming ? 0 : Math.max(0, sound._seek > 0 ? sound._seek : self._sprite[sprite][0] / 1000);
+      var duration = self._streaming ? 90 : Math.max(0, ((self._sprite[sprite][0] + self._sprite[sprite][1]) / 1000) - seek);
       var timeout = (duration * 1000) / Math.abs(sound._rate);
-      var start = self._sprite[sprite][0] / 1000;
-      var stop = (self._sprite[sprite][0] + self._sprite[sprite][1]) / 1000;
+      var start = self._streaming ? 0 : (self._sprite[sprite][0] / 1000);
+      var stop = self._streaming ? 90 : (self._sprite[sprite][0] + self._sprite[sprite][1]) / 1000;
       sound._sprite = sprite;
 
       // Mark the sound as ended instantly so that this async playback
@@ -914,14 +938,15 @@
           node.volume = sound._volume * Howler.volume();
           node.playbackRate = sound._rate;
 
-          // Resume streaming player if present
-          if (sound._streamingPlayer && sound._streamingPlayer.play) {
-            sound._streamingPlayer.play();
-          }
-
           // Some browsers will throw an error if this is called without user interaction.
           try {
             var play = node.play();
+
+            // Resume streaming player if present
+            if (sound._streamingPlayer && sound._streamingPlayer.play) {
+              console.log('stream play')
+              sound._streamingPlayer.play();
+            }
 
             // Support older browsers that don't support promises, and thus don't have this issue.
             if (play && typeof Promise !== 'undefined' && (play instanceof Promise || typeof play.then === 'function')) {
@@ -936,6 +961,7 @@
                 .then(function () {
                   self._playLock = false;
                   node._unlocked = true;
+                  self._playState = 'playing';
                   if (!internal) {
                     self._emit('play', sound._id);
                   } else {
@@ -954,6 +980,7 @@
             } else if (!internal) {
               self._playLock = false;
               setParams();
+              self._playState = 'playing';
               self._emit('play', sound._id);
             }
 
@@ -986,15 +1013,20 @@
         };
 
         // If this is streaming audio, don't call load() as the streaming player manages it
-        if (!parent._streaming && node.src === 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA') {
+        if (!self._streaming && node.src === 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA') {
           node.src = self._src;
           node.load();
         }
 
-        // For streaming audio, we need to wait for the streaming player to be ready, not the audio element
-        if (parent._streaming) {
-          // For HLS and DASH streams, just play directly with streaming player managing the buffering
-          playHtml5();
+        // For streaming audio, initialize the streaming player first
+        console.log(self)
+        if (self._streaming && !sound._streamingInitialized) {
+          // Initialize streaming player for this sound instance
+          sound._initializeStreamingPlayer(sound, function() {
+            sound._streamingInitialized = true;
+            // Once streaming player is ready, play
+            playHtml5();
+          });
         } else if (node.readyState >= 3 || (window && window.ejecta) || (!node.readyState && Howler._navigator.isCocoonJS)) {
           // Standard audio: Play immediately if ready
           playHtml5();
@@ -1057,6 +1089,9 @@
           sound._seek = self.seek(ids[i]);
           sound._rateSeek = 0;
           sound._paused = true;
+
+          // Update play state
+          self._playState = 'paused';
 
           // Stop currently running fades.
           self._stopFade(ids[i]);
@@ -1136,6 +1171,9 @@
           sound._paused = true;
           sound._ended = true;
 
+          // Update play state
+          self._playState = 'stopped';
+
           // Stop currently running fades.
           self._stopFade(ids[i]);
 
@@ -1156,7 +1194,7 @@
               sound._node.currentTime = sound._start || 0;
               sound._node.pause();
 
-              // Stop streaming player if present
+              // Stop and destroy streaming player if present
               if (sound._streamingPlayer) {
                 if (sound._streamingPlayer.pause) {
                   sound._streamingPlayer.pause();
@@ -1164,6 +1202,10 @@
                 if (sound._streamingPlayer.reset) {
                   sound._streamingPlayer.reset();
                 }
+                if (sound._streamingPlayer.destroy) {
+                  sound._streamingPlayer.destroy();
+                }
+                delete sound._streamingPlayer;
               }
 
               // If this is a live stream, stop download once the audio is stopped.
@@ -1177,6 +1219,12 @@
             self._emit('stop', sound._id);
           }
         }
+      }
+
+      // For streaming, remove sounds to re-create on next play
+      if (self._streaming) {
+        self._sounds = [];
+        self._streamingInitialized = false;
       }
 
       return self;
@@ -1685,6 +1733,12 @@
 
       if (sound) {
         if (typeof seek === 'number' && seek >= 0) {
+          // For streaming audio, seeking is not supported
+          if (self._streaming) {
+            self._emit('playerror', id, 'Seeking is not supported for streaming audio');
+            return self;
+          }
+
           // Pause the sound and update position for restarting playback.
           var playing = self.playing(id);
           if (playing) {
@@ -1699,15 +1753,6 @@
           // Update the seek position for HTML5 Audio.
           if (!self._webAudio && sound._node && !isNaN(sound._node.duration)) {
             sound._node.currentTime = seek;
-
-            // Seek streaming player if present
-            if (sound._streamingPlayer) {
-              if (sound._streamingPlayer.seek) {
-                sound._streamingPlayer.seek(seek);
-              } else if (sound._streamingPlayer.time !== undefined) {
-                sound._streamingPlayer.time(seek);
-              }
-            }
           }
 
           // Seek and emit when ready.
@@ -1795,6 +1840,14 @@
      */
     state: function () {
       return this._state;
+    },
+
+    /**
+     * Returns the current play state of this Howl.
+     * @return {String} 'stopped', 'playing', 'paused'
+     */
+    playState: function () {
+      return this._playState;
     },
 
     /**
@@ -2026,7 +2079,7 @@
       }
 
       // Should this sound loop?
-      var loop = !!(sound._loop || self._sprite[sprite][2]);
+      var loop = self._streaming ? false : !!(sound._loop || self._sprite[sprite][2]);
 
       // Fire the ended event.
       self._emit('end', sound._id);
@@ -2321,10 +2374,8 @@
         // Get an unlocked Audio object from the pool.
         self._node = Howler._obtainHtml5Audio();
 
-        // attach to dom
-        self._node.style.display = 'none';
-        if (typeof document !== 'undefined' && document.body) {
-          document.body.appendChild(self._node);
+        if (document){
+          document.body.appendChild(self._node)
         }
 
         // Listen for errors (http://dev.w3.org/html5/spec-author-view/spec.html#mediaerror).
@@ -2340,6 +2391,19 @@
         self._endFn = self._endListener.bind(self);
         self._node.addEventListener('ended', self._endFn, false);
 
+        // Listen for additional HTML5 events
+        self._node.addEventListener('loadstart', function() { parent._emit('loadstart'); }, false);
+        self._node.addEventListener('progress', function() { parent._emit('progress'); }, false);
+        self._node.addEventListener('canplay', function() { parent._emit('canplay'); }, false);
+        self._node.addEventListener('canplaythrough', function() { parent._emit('canplaythrough'); }, false);
+        self._node.addEventListener('waiting', function() { parent._emit('waiting'); }, false);
+        self._node.addEventListener('seeking', function() { parent._emit('seeking'); }, false);
+        self._node.addEventListener('seeked', function() { parent._emit('seeked'); }, false);
+        self._node.addEventListener('durationchange', function() { parent._emit('durationchange'); }, false);
+        self._node.addEventListener('timeupdate', function() { parent._emit('timeupdate'); }, false);
+        self._node.addEventListener('ratechange', function() { parent._emit('ratechange'); }, false);
+        self._node.addEventListener('volumechange', function() { parent._emit('volumechange'); }, false);
+
         // Setup the new audio node.
         self._node.preload = parent._preload === true ? 'auto' : parent._preload;
         self._node.volume = volume * Howler.volume();
@@ -2347,74 +2411,13 @@
         // Set crossOrigin for CORS support needed by streaming players
         self._node.crossOrigin = 'anonymous';
 
-        // Initialize streaming player if needed
-        if (parent._streaming && parent._streamingFormat === 'dash' && typeof dashjs !== 'undefined' && dashjs.MediaPlayer) {
-          // Initialize dash.js player with correct API
-          self._streamingPlayer = dashjs.MediaPlayer().create();
-          self._streamingPlayer.initialize(self._node, parent._src, false);
-        } else if (parent._streaming && parent._streamingFormat === 'hls' && typeof Hls !== 'undefined' && Hls.isSupported()) {
-          // Initialize hls.js player
-          self._streamingPlayer = new Hls({
-            debug: true,
-            autoStartLoad: true,
-            enableWorker: true,
-            lowLatencyMode: true,
-            backBufferLength: 90
-          });
-
-          // Load the source after attaching media
-          self._streamingPlayer.loadSource(parent._src);
-          // Attach media element BEFORE loading source
-          self._streamingPlayer.attachMedia(self._node);
-
-          // Track if load event has been emitted
-          var loadEventEmitted = false;
-
-          // Add HTML5 audio element listeners for stream readiness
-          var onCanPlay = function () {
-            if (!loadEventEmitted) {
-              parent._state = 'loaded';
-              parent._emit('load');
-              loadEventEmitted = true;
-            }
-            if (parent._autoplay) {
-              self._node.play().catch(function (err) {
-                console.warn('HLS autoplay failed:', err);
-              });
-            }
-          };
-
-          // Add event listeners for HLS
-          self._streamingPlayer.on(Hls.Events.MANIFEST_PARSED, function () {
-            console.log('HLS MANIFEST_PARSED event triggered');
-            if (!loadEventEmitted) {
-              parent._state = 'loaded';
-              parent._emit('load');
-              loadEventEmitted = true;
-            }
-            if (parent._autoplay) {
-              self._node.play().catch(function (err) {
-                console.warn('HLS autoplay failed:', err);
-              });
-            }
-          });
-
-          self._streamingPlayer.on(Hls.Events.ERROR, function (event, data) {
-            // Handle HLS errors
-            if (data.fatal) {
-              console.error('HLS fatal error:', data);
-              parent._emit('loaderror', null, 'HLS streaming error: ' + data.type);
-            }
-          });
-
-          // Also listen to HTML5 audio events as fallback
-          self._node.addEventListener('canplay', onCanPlay, false);
-        } else {
-          // For standard audio formats, set the source directly
+        // For non-streaming audio, set the source directly
+        if (!parent._streaming) {
           self._node.src = parent._src;
           // Begin loading the source.
           self._node.load();
         }
+        // Streaming initialization will be done in play() method
       }
 
       return self;
@@ -2507,6 +2510,164 @@
 
       // Clear the event listener since the duration is now correct.
       self._node.removeEventListener('ended', self._endFn, false);
+    },
+
+    /**
+     * Initialize streaming player for a sound instance.
+     * @param  {Sound} sound The sound instance.
+     * @param  {Function} callback Function to call when ready.
+     */
+    _initializeStreamingPlayer: function (sound, callback) {
+      var self = this;
+      var parent = self._parent;
+
+      if (parent._streamingFormat === 'dash' && typeof dashjs !== 'undefined' && dashjs.MediaPlayer) {
+        // Initialize dash.js player
+        sound._streamingPlayer = dashjs.MediaPlayer().create();
+        
+        // Listen to DASH events
+        sound._streamingPlayer.on(dashjs.MediaPlayer.events.MANIFEST_LOADED, function() {
+          parent._state = 'canplay';
+          parent._emit('canplay');
+        });
+        
+        sound._streamingPlayer.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, function() {
+          parent._state = 'loaded';
+          parent._emit('load');
+        });
+        
+        sound._streamingPlayer.on(dashjs.MediaPlayer.events.PLAYBACK_STARTED, function() {
+          parent._playState = 'playing';
+        });
+        
+        sound._streamingPlayer.on(dashjs.MediaPlayer.events.PLAYBACK_PAUSED, function() {
+          parent._playState = 'paused';
+          parent._emit('pause', sound._id);
+        });
+        
+        sound._streamingPlayer.on(dashjs.MediaPlayer.events.PLAYBACK_ENDED, function() {
+          parent._playState = 'stopped';
+          parent._ended(sound);
+        });
+        
+        sound._streamingPlayer.on(dashjs.MediaPlayer.events.PLAYBACK_WAITING, function() {
+          parent._playState = 'waiting';
+          parent._emit('waiting');
+        });
+        
+        sound._streamingPlayer.on(dashjs.MediaPlayer.events.PLAYBACK_SEEKING, function() {
+          parent._playState = 'seeking';
+          parent._emit('seeking');
+        });
+        
+        sound._streamingPlayer.on(dashjs.MediaPlayer.events.PLAYBACK_SEEKED, function() {
+          parent._emit('seeked');
+        });
+        
+        sound._streamingPlayer.on(dashjs.MediaPlayer.events.PLAYBACK_TIME_UPDATED, function() {
+          parent._emit('timeupdate');
+        });
+        
+        sound._streamingPlayer.on(dashjs.MediaPlayer.events.PLAYBACK_RATE_CHANGED, function() {
+          parent._emit('ratechange');
+        });
+        
+        sound._streamingPlayer.on(dashjs.MediaPlayer.events.ERROR, function(event) {
+          parent._emit('loaderror', sound._id, 'DASH streaming error');
+        });
+
+        // Initialize with the source
+        if (sound._streamingPlayer.initialize) {
+          sound._streamingPlayer.initialize(sound._node, parent._src, false);
+        } else {
+          // fallback to dashjs 5.0 or UMD version
+          sound._streamingPlayer.attachView(sound._node);
+          sound._streamingPlayer.attachSource(parent._src);
+        }
+        sound._node.load();
+
+        // Call callback immediately for DASH
+        callback();
+        parent._streamingInitialized = true;
+
+      } else if (parent._streamingFormat === 'hls' && typeof Hls !== 'undefined' && Hls.isSupported()) {
+        // Initialize hls.js player
+        sound._streamingPlayer = new Hls({
+          debug: false,
+          autoStartLoad: true,
+          enableWorker: false,
+          lowLatencyMode: false,
+          backBufferLength: 90
+        });
+
+        // Listen to HLS events
+        sound._streamingPlayer.on(Hls.Events.MANIFEST_LOADING, function() {
+          parent._state = 'loadstart';
+          parent._emit('loadstart');
+        });
+        
+        sound._streamingPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
+          parent._state = 'loaded';
+          parent._emit('load');
+          parent._state = 'canplay';
+          parent._emit('canplay');
+          callback();
+          parent._streamingInitialized = true;
+        });
+        
+        sound._streamingPlayer.on(Hls.Events.LEVEL_LOADED, function() {
+          parent._emit('progress');
+        });
+        
+        sound._streamingPlayer.on(Hls.Events.BUFFER_APPENDED, function() {
+          parent._emit('progress');
+        });
+        
+        sound._streamingPlayer.on(Hls.Events.FRAG_LOADED, function() {
+          parent._emit('progress');
+        });
+        
+        sound._streamingPlayer.on(Hls.Events.BUFFER_EOS, function() {
+          parent._emit('canplaythrough');
+        });
+        
+        sound._streamingPlayer.on(Hls.Events.LEVEL_PTS_UPDATED, function() {
+          parent._emit('timeupdate');
+        });
+        
+        sound._streamingPlayer.on(Hls.Events.RATE_CHANGE, function() {
+          parent._emit('ratechange');
+        });
+        
+        sound._streamingPlayer.on(Hls.Events.BUFFER_EMPTY, function() {
+          parent._playState = 'waiting';
+          parent._emit('waiting');
+        });
+        
+        sound._streamingPlayer.on(Hls.Events.SEEKING, function() {
+          parent._playState = 'seeking';
+          parent._emit('seeking');
+        });
+        
+        sound._streamingPlayer.on(Hls.Events.SEEKED, function() {
+          parent._emit('seeked');
+        });
+        
+        sound._streamingPlayer.on(Hls.Events.ERROR, function(event, data) {
+          if (data.fatal) {
+            parent._emit('loaderror', sound._id, 'HLS streaming error: ' + data.type);
+          }
+        });
+
+        // Load the source
+        sound._streamingPlayer.loadSource(parent._src);
+        sound._streamingPlayer.attachMedia(sound._node);
+        sound._node.load();
+
+      } else {
+        // Fallback
+        callback();
+      }
     }
   };
 
