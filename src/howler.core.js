@@ -778,6 +778,11 @@
       var self = this;
       var id = null;
 
+      if (self._streaming){
+        // ignore id for streaming media
+        sprite = undefined
+      }
+
       // Determine if a sprite, sound id or nothing was passed
       if (typeof sprite === 'number') {
         id = sprite;
@@ -944,7 +949,6 @@
 
             // Resume streaming player if present
             if (sound._streamingPlayer && sound._streamingPlayer.play) {
-              console.log('stream play')
               sound._streamingPlayer.play();
             }
 
@@ -1019,7 +1023,6 @@
         }
 
         // For streaming audio, initialize the streaming player first
-        console.log(self)
         if (self._streaming && !self._streamingInitialized) {
           self._playLock = false; // never playLock for streaming
           // Initialize streaming player for this sound instance
@@ -1062,6 +1065,12 @@
      */
     pause: function (id) {
       var self = this;
+
+      if (self._streaming){
+        // for streaming media, just call stop
+        self.stop(id)
+        return self;
+      }
 
       // If the sound hasn't loaded or a play() promise is pending, add it to the load queue to pause when capable.
       if (self._state !== 'loaded' || self._playLock) {
@@ -1114,13 +1123,6 @@
               self._cleanBuffer(sound._node);
             } else if (!isNaN(sound._node.duration) || sound._node.duration === Infinity) {
               sound._node.pause();
-
-              // Pause streaming player if present
-              if (sound._streamingPlayer) {
-                if (sound._streamingPlayer.pause) {
-                  sound._streamingPlayer.pause();
-                }
-              }
             }
           }
         }
@@ -1143,7 +1145,10 @@
     stop: function (id, internal) {
       var self = this;
 
-      console.log(self)
+      if (self._streaming){
+        id = undefined
+      }
+
       // If the sound hasn't loaded, add it to the load queue to stop when capable.
       if (self._state !== 'loaded' || self._playLock) {
         self._queue.push({
@@ -1158,8 +1163,6 @@
 
       // If no id is passed, get all ID's to be stopped.
       var ids = self._getSoundIds(id);
-
-      console.log('stop', ids)
 
       for (var i = 0; i < ids.length; i++) {
         // Clear the end timer.
@@ -1199,7 +1202,6 @@
               sound._node.pause();
 
               // Stop and destroy streaming player if present
-              console.log(sound);
               if (sound._streamingPlayer) {
                 if (sound._streamingPlayer.pause) {
                   sound._streamingPlayer.pause();
@@ -1243,6 +1245,10 @@
      */
     mute: function (muted, id) {
       var self = this;
+
+      if (self._streaming){
+        id = undefined
+      }
 
       // If the sound hasn't loaded, add it to the load queue to mute when capable.
       if (self._state !== 'loaded' || self._playLock) {
@@ -1310,6 +1316,10 @@
       var self = this;
       var args = arguments;
       var vol, id;
+
+      if (self._streaming && args.length == 2){
+        args[1] = undefined
+      }
 
       // Determine the values based on arguments.
       if (args.length === 0) {
@@ -1395,6 +1405,10 @@
      */
     fade: function (from, to, len, id) {
       var self = this;
+
+      if (self._streaming){
+        id = undefined
+      }
 
       // If the sound hasn't loaded, add it to the load queue to fade when capable.
       if (self._state !== 'loaded' || self._playLock) {
@@ -2529,6 +2543,11 @@
       if (parent._streamingFormat === 'dash' && typeof dashjs !== 'undefined' && dashjs.MediaPlayer) {
         // Initialize dash.js player
         sound._streamingPlayer = dashjs.MediaPlayer().create();
+        sound._streamingPlayer.updateSettings({
+            'debug': {
+                'logLevel': dashjs.Debug.LOG_LEVEL_NONE // Turns off console logging
+            }
+        });
         
         // Listen to DASH events
         sound._streamingPlayer.on(dashjs.MediaPlayer.events.MANIFEST_LOADED, function() {
@@ -2600,7 +2619,7 @@
         sound._streamingPlayer = new Hls({
           debug: false,
           autoStartLoad: true,
-          enableWorker: false,
+          enableWorker: true,
           lowLatencyMode: false,
           backBufferLength: 90
         });

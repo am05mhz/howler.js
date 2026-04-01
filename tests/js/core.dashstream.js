@@ -30,7 +30,7 @@ var tests = [
     sound1.pause(id);
 
     label.innerHTML = 'PAUSED';
-    setTimeout(fn, 2000);
+    setTimeout(fn, 5000);
   },
 
   function(fn) {
@@ -41,12 +41,22 @@ var tests = [
   },
 
   function(fn) {
-    sound1.stop(id);
+    sound1.fade(1, 0, 2000, id);
 
-    label.innerHTML = 'STOPPED';
-    setTimeout(fn, 2000);
+    label.innerHTML = 'FADE OUT';
+    sound1.once('fade', function() {
+      fn();
+    });
   },
 
+  function(fn) {
+    sound1.fade(0, 1, 2000, id);
+
+    label.innerHTML = 'FADE IN';
+    sound1.once('fade', function() {
+      fn();
+    });
+  },
   function(fn) {
     sound1.mute(true, id);
 
@@ -72,6 +82,13 @@ var tests = [
     sound1.volume(1, id);
 
     label.innerHTML = 'FULL VOLUME';
+    setTimeout(fn, 2000);
+  },
+
+  function(fn) {
+    sound1.stop(id);
+
+    label.innerHTML = 'STOPPED';
     setTimeout(fn, 2000);
   },
 ];
