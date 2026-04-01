@@ -876,7 +876,7 @@
         sound._seek = seek;
         sound._start = start;
         sound._stop = stop;
-        sound._loop = !!(sound._loop || self._sprite[sprite][2]);
+        sound._loop = self._streaming ? false : !!(sound._loop || self._sprite[sprite][2]);
       };
 
       // End the sound instantly if seek is at the end.
