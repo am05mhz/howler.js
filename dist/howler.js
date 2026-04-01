@@ -51,6 +51,7 @@
       self.usingWebAudio = true;
       self.autoSuspend = true;
       self.ctx = null;
+      self.hls = null;
 
       // Set to false to disable the auto audio unlocker.
       self.autoUnlock = true;
@@ -604,6 +605,7 @@
       // Setup streaming support
       self._streaming = o.streaming || false;
       self._streamingFormat = o.streamingFormat || null;
+      self._hls = o.hls || null;
 
       // Setup all other default properties.
       self._duration = 0;
@@ -2615,82 +2617,98 @@
         callback();
         parent._streamingInitialized = true;
 
-      } else if (parent._streamingFormat === 'hls' && typeof Hls !== 'undefined' && Hls.isSupported()) {
-        // Initialize hls.js player
-        sound._streamingPlayer = new Hls({
-          debug: false,
-          autoStartLoad: true,
-          enableWorker: true,
-          lowLatencyMode: false,
-          backBufferLength: 90
-        });
-
-        // Listen to HLS events
-        sound._streamingPlayer.on(Hls.Events.MANIFEST_LOADING, function() {
-          parent._state = 'loadstart';
-          parent._emit('loadstart');
-        });
-        
-        sound._streamingPlayer.on(Hls.Events.MANIFEST_PARSED, function() {
-          parent._state = 'loaded';
-          parent._emit('load');
-          parent._state = 'canplay';
-          parent._emit('canplay');
-          callback();
-          parent._streamingInitialized = true;
-        });
-        
-        sound._streamingPlayer.on(Hls.Events.LEVEL_LOADED, function() {
-          parent._emit('progress');
-        });
-        
-        sound._streamingPlayer.on(Hls.Events.BUFFER_APPENDED, function() {
-          parent._emit('progress');
-        });
-        
-        sound._streamingPlayer.on(Hls.Events.FRAG_LOADED, function() {
-          parent._emit('progress');
-        });
-        
-        sound._streamingPlayer.on(Hls.Events.BUFFER_EOS, function() {
-          parent._emit('canplaythrough');
-        });
-        
-        sound._streamingPlayer.on(Hls.Events.LEVEL_PTS_UPDATED, function() {
-          parent._emit('timeupdate');
-        });
-        
-        sound._streamingPlayer.on(Hls.Events.RATE_CHANGE, function() {
-          parent._emit('ratechange');
-        });
-        
-        sound._streamingPlayer.on(Hls.Events.BUFFER_EMPTY, function() {
-          parent._playState = 'waiting';
-          parent._emit('waiting');
-        });
-        
-        sound._streamingPlayer.on(Hls.Events.SEEKING, function() {
-          parent._playState = 'seeking';
-          parent._emit('seeking');
-        });
-        
-        sound._streamingPlayer.on(Hls.Events.SEEKED, function() {
-          parent._emit('seeked');
-        });
-        
-        sound._streamingPlayer.on(Hls.Events.ERROR, function(event, data) {
-          if (data.fatal) {
-            parent._emit('loaderror', sound._id, 'HLS streaming error: ' + data.type);
+      } else if (parent._streamingFormat === 'hls') {
+        // Support HLS module injection via options, global Howler.hls, or browser global
+        var HlsClass = parent._hls || Howler.hls;
+        if (!HlsClass) {
+          if (typeof Hls !== 'undefined') {
+            HlsClass = Hls;
+          } else if (typeof globalThis !== 'undefined' && globalThis.Hls) {
+            HlsClass = globalThis.Hls;
           }
-        });
+        }
 
-        // Load the source
-        sound._streamingPlayer.loadSource(parent._src);
-        sound._streamingPlayer.attachMedia(sound._node);
-        sound._node.load();
+        if (!HlsClass || typeof HlsClass.isSupported !== 'function' || !HlsClass.isSupported()) {
+          // No HLS support detected, fallback to callback
+          callback();
+
+        } else {
+          // Initialize hls.js player
+          sound._streamingPlayer = new HlsClass({
+            debug: false,
+            autoStartLoad: true,
+            enableWorker: true,
+            lowLatencyMode: false,
+            backBufferLength: 90
+          });
+
+          // Listen to HLS events
+          sound._streamingPlayer.on(HlsClass.Events.MANIFEST_LOADING, function() {
+            parent._state = 'loadstart';
+            parent._emit('loadstart');
+          });
+          
+          sound._streamingPlayer.on(HlsClass.Events.MANIFEST_PARSED, function() {
+            parent._state = 'loaded';
+            parent._emit('load');
+            parent._state = 'canplay';
+            parent._emit('canplay');
+            callback();
+            parent._streamingInitialized = true;
+          });
+          
+          sound._streamingPlayer.on(HlsClass.Events.LEVEL_LOADED, function() {
+            parent._emit('progress');
+          });
+          
+          sound._streamingPlayer.on(HlsClass.Events.BUFFER_APPENDED, function() {
+            parent._emit('progress');
+          });
+          
+          sound._streamingPlayer.on(HlsClass.Events.FRAG_LOADED, function() {
+            parent._emit('progress');
+          });
+          
+          sound._streamingPlayer.on(HlsClass.Events.BUFFER_EOS, function() {
+            parent._emit('canplaythrough');
+          });
+          
+          sound._streamingPlayer.on(HlsClass.Events.LEVEL_PTS_UPDATED, function() {
+            parent._emit('timeupdate');
+          });
+          
+          sound._streamingPlayer.on(HlsClass.Events.RATE_CHANGE, function() {
+            parent._emit('ratechange');
+          });
+          
+          sound._streamingPlayer.on(HlsClass.Events.BUFFER_EMPTY, function() {
+            parent._playState = 'waiting';
+            parent._emit('waiting');
+          });
+          
+          sound._streamingPlayer.on(HlsClass.Events.SEEKING, function() {
+            parent._playState = 'seeking';
+            parent._emit('seeking');
+          });
+          
+          sound._streamingPlayer.on(HlsClass.Events.SEEKED, function() {
+            parent._emit('seeked');
+          });
+          
+          sound._streamingPlayer.on(HlsClass.Events.ERROR, function(event, data) {
+            if (data.fatal) {
+              parent._emit('loaderror', sound._id, 'HLS streaming error: ' + data.type);
+            }
+          });
+
+          // Load the source
+          sound._streamingPlayer.loadSource(parent._src);
+          sound._streamingPlayer.attachMedia(sound._node);
+          sound._node.load();
+        }
 
       } else {
-        // Fallback
+        // Fallback for unknown streaming format or missing Hls
         callback();
       }
     }
