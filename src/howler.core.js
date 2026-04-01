@@ -1213,6 +1213,7 @@
                   sound._streamingPlayer.destroy();
                 }
                 delete sound._streamingPlayer;
+                delete self._streamingInitialized;
               }
 
               // If this is a live stream, stop download once the audio is stopped.
