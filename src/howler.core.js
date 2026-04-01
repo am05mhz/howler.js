@@ -865,10 +865,10 @@
 
       // Determine how long to play for and where to start playing.
       var seek = self._streaming ? 0 : Math.max(0, sound._seek > 0 ? sound._seek : self._sprite[sprite][0] / 1000);
-      var duration = self._streaming ? 90 : Math.max(0, ((self._sprite[sprite][0] + self._sprite[sprite][1]) / 1000) - seek);
+      var duration = self._streaming ? Infinity : Math.max(0, ((self._sprite[sprite][0] + self._sprite[sprite][1]) / 1000) - seek);
       var timeout = (duration * 1000) / Math.abs(sound._rate);
       var start = self._streaming ? 0 : (self._sprite[sprite][0] / 1000);
-      var stop = self._streaming ? 90 : (self._sprite[sprite][0] + self._sprite[sprite][1]) / 1000;
+      var stop = self._streaming ? Infinity : (self._sprite[sprite][0] + self._sprite[sprite][1]) / 1000;
       sound._sprite = sprite;
 
       // Mark the sound as ended instantly so that this async playback
